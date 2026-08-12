@@ -1,0 +1,57 @@
+# ============================================================
+# 每日自动财经舆情预测任务 - Python依赖清单
+# 安装命令: pip install -r requirements.txt
+# ============================================================
+
+# 数据处理核心
+pandas>=2.0.0
+numpy>=1.24.0
+
+# 数据库
+pymysql>=1.1.0
+SQLAlchemy>=2.0.0
+
+# 浏览器自动化（抖音数据采集）
+playwright>=1.40.0
+
+# 行情数据（免费）
+akshare>=1.12.0
+
+# 定时调度
+schedule>=1.2.0
+
+# Excel报表
+openpyxl>=3.1.0
+
+# 日期处理
+python-dateutil>=2.8.0
+
+# HTTP请求
+requests>=2.31.0
+
+# 大模型 API
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# ============================================================
+# 视频内容提取 (可选依赖，不安装则视频提取自动跳过)
+# ============================================================
+
+# 视频帧提取
+opencv-python>=4.8.0
+
+# 语音转文字 (Whisper)
+openai-whisper>=20231117
+
+# 图片处理
+Pillow>=10.0.0
+
+# Vision - OCR 轻量文字提取 (可选，免费兜底方案)
+# EasyOCR 基于PyTorch，跨平台兼容性好，中文识别准确率高
+easyocr>=1.7.0
+
+# ffmpeg-python 封装 (可选，本模块直接调用系统ffmpeg命令)
+# 系统需要单独安装 ffmpeg:
+#   Windows: winget install ffmpeg
+#   Linux:   sudo apt install ffmpeg
+#   macOS:   brew install ffmpeg
