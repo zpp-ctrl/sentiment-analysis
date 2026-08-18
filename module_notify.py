@@ -40,9 +40,9 @@ WORKBUDDY_OUTPUT = os.path.join(
 
 def _build_markdown(predictions: list, stat_date: str) -> str:
     """构建预测结果的 Markdown 文本"""
-    dir_map = {"up": "🟢看涨", "down": "🔴看跌", "neutral": "⚪中性"}
-    up_count = sum(1 for p in predictions if p.get("predict_direction") == "up")
-    down_count = sum(1 for p in predictions if p.get("predict_direction") == "down")
+    dir_map = {"up": "🟢看涨", "slightly_up": "🟢偏多", "slightly_down": "🔴偏空", "down": "🔴看跌", "neutral": "⚪中性"}
+    up_count = sum(1 for p in predictions if p.get("predict_direction") in ("up", "slightly_up"))
+    down_count = sum(1 for p in predictions if p.get("predict_direction") in ("down", "slightly_down"))
     neutral_count = len(predictions) - up_count - down_count
 
     lines = [

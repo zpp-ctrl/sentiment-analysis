@@ -232,17 +232,23 @@ class SentimentPredictor:
         bearish_score = weighted_bearish / total_weight
         net_score = bullish_score - bearish_score
 
-        # 判定方向（修复: 中性区间不再默认看涨）
+        # 判定方向（新增 偏多/偏空 档，避免明显偏多被压成中性）
         if net_score > 0.15:
             direction = "up"
             confidence = min(net_score * 1.5, 0.95)
+        elif net_score > 0.05:
+            direction = "slightly_up"
+            confidence = 0.5 + abs(net_score)
         elif net_score < -0.15:
             direction = "down"
             confidence = min(abs(net_score) * 1.5, 0.95)
+        elif net_score < -0.05:
+            direction = "slightly_down"
+            confidence = 0.5 + abs(net_score)
         else:
-            # net_score 在 -0.15~0.15 之间，信号太弱，返回中性
+            # |net_score| <= 0.05，多空基本均衡
             direction = "neutral"
-            confidence = 0.5 + abs(net_score)  # 0.50~0.65，表示不确定程度
+            confidence = 0.5 + abs(net_score)
 
         return {
             "index_code": index_code,
@@ -278,9 +284,9 @@ class SentimentPredictor:
 
     def generate_summary(self, predictions: List[Dict]) -> str:
         """生成预测摘要文本"""
-        lines = ["=== 四大指数当日涨跌预测 ===\n"]
+        lines = ["=== 四大指数次日涨跌预测 ===\n"]
         for p in predictions:
-            direction_zh = {"up": "📈 看涨", "down": "📉 看跌", "neutral": "➡️ 中性"}
+            direction_zh = {"up": "📈 看涨", "slightly_up": "📈 偏多", "slightly_down": "📉 偏空", "down": "📉 看跌", "neutral": "➡️ 中性"}
             d = direction_zh.get(p["predict_direction"], p["predict_direction"])
             lines.append(
                 f"{p['index_name']:6s}: {d} | "

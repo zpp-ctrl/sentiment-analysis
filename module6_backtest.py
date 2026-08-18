@@ -85,7 +85,11 @@ class BacktestEngine:
                 continue
 
             actual_dir = "up" if actual_pct > 0 else "down"
-            is_correct = 1 if pred_dir == actual_dir else 0
+            # 偏多/偏空 归入 看涨/看跌 计算准确率
+            pred_norm = ("up" if pred_dir in ("up", "slightly_up")
+                         else "down" if pred_dir in ("down", "slightly_down")
+                         else pred_dir)
+            is_correct = 1 if pred_norm == actual_dir else 0
 
             actual_directions.append(actual_dir)
             actual_pct_changes.append(round(actual_pct, 4))

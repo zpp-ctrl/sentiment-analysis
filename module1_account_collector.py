@@ -277,20 +277,21 @@ LAUNCH_ARGS = [
 ]
 
 # ==================== v6 优化采集配置 ====================
-MAX_CONCURRENT_CONTEXTS = 20        # ★ 并发浏览器线程数 [优化: 6→14→20]
-MAX_ACCOUNTS_TO_SCRAPE = 1200       # 单次采集最大账号数 (与COLLECTION_TOP_N对齐+缓冲)
+MAX_CONCURRENT_CONTEXTS = 3         # ★ 并发浏览器线程数 [降速防反爬: 20→3]
+MAX_ACCOUNTS_TO_SCRAPE = 300        # 单次采集最大账号数 (降速+关键词为主后下调: 1200→300，避免主页抓取拖慢整体)
 MIN_FOLLOWER_ACCOUNTS = True        # ★ 包含粉丝>5万的财经自媒体(与config阈值一致)
-PROFILE_PAGE_TIMEOUT_S = 10         # ★ 单账号主页加载超时(秒) [优化: 25→15→10]
-PROFILE_SSR_WAIT_S = 1              # ★ 等待RENDER_DATA元素出现的额外时间(秒) [优化: 5→3→1]
-PROFILE_SCROLL_ROUNDS = 3           # ★ 主页滚动次数 [优化: 15→8→3]
-PROFILE_SCROLL_INTERVAL_S = 0.15    # ★ 滚动间隔(秒) [优化: 0.5→0.3→0.15]
-PROFILE_XHR_WAIT_S = 0.3            # ★ 滚动完成后等待XHR回调的额外时间(秒) [优化: 3.0→1.5→0.3]
+PROFILE_PAGE_TIMEOUT_S = 20         # ★ 单账号主页加载超时(秒) [降速: 10→20]
+PROFILE_SSR_WAIT_S = 3              # ★ 等待RENDER_DATA元素出现的额外时间(秒) [降速: 1→3]
+PROFILE_INITIAL_WAIT_S = 5          # ★ 页面加载后固定等待(秒)，等 aweme/post 接口触发 [新增，诊断验证需5s]
+PROFILE_SCROLL_ROUNDS = 5           # ★ 主页滚动次数 [降速: 3→5]
+PROFILE_SCROLL_INTERVAL_S = 1.0     # ★ 滚动间隔(秒) [降速: 0.15→1.0]
+PROFILE_XHR_WAIT_S = 2.5            # ★ 滚动完成后等待XHR回调的额外时间(秒) [降速: 0.3→2.5]
 DISCOVERY_KW_COUNT = 50             # ★ 账号发现阶段关键词数（增加到50个，搜索是主要数据来源）
-WORKER_DELAY_MIN_S = 0.05           # ★ 每个账号间最小延迟(秒) [优化: 3.0→0.5→0.05]
-WORKER_DELAY_MAX_S = 0.3            # ★ 每个账号间最大延迟(秒) [优化: 8.0→2.0→0.3]
-PROFILE_BATCH_REST_EVERY = 100      # ★ 每处理N个账号休息一次(防限流) [优化: 15→30→100]
-PROFILE_BATCH_REST_MIN_S = 0.5      # ★ 批次休息最小秒数 [优化: 2→1→0.5]
-PROFILE_BATCH_REST_MAX_S = 1.0      # ★ 批次休息最大秒数 [优化: 5→3→1]
+WORKER_DELAY_MIN_S = 1.5            # ★ 每个账号间最小延迟(秒) [降速: 0.05→1.5]
+WORKER_DELAY_MAX_S = 3.5            # ★ 每个账号间最大延迟(秒) [降速: 0.3→3.5]
+PROFILE_BATCH_REST_EVERY = 50       # ★ 每处理N个账号休息一次(防限流) [降速: 100→50]
+PROFILE_BATCH_REST_MIN_S = 3.0      # ★ 批次休息最小秒数 [降速: 0.5→3]
+PROFILE_BATCH_REST_MAX_S = 6.0      # ★ 批次休息最大秒数 [降速: 1→6]
 
 # ★★★ 抖音帖子API端点白名单（只有这些URL的响应才提取帖子）★★★
 POST_API_PATTERNS = [
@@ -2738,19 +2739,6 @@ class DouyinCollector:
             locale="zh-CN", timezone_id="Asia/Shanghai",
             user_agent=worker_ua,
             storage_state=STORAGE_STATE if has_login else None,
-            extra_http_headers={
-                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Upgrade-Insecure-Requests": "1",
-                "Cache-Control": "max-age=0",
-                "sec-ch-ua": get_random_sec_ch_ua(),
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-platform": '"Windows"',
-            },
         )
         await context.add_init_script(STEALTH_INIT_SCRIPT)
 
@@ -2791,6 +2779,9 @@ class DouyinCollector:
                     )
                 except Exception:
                     pass  # SSR不存在也不影响，继续XHR方式
+
+                # ★ 页面初始化固定等待：等 aweme/post 帖子接口触发（太早滚动拿不到帖子）
+                await asyncio.sleep(PROFILE_INITIAL_WAIT_S)
 
                 # ★ v5: SSR提取
                 raw_posts = await self._extract_from_ssr(page)
@@ -3417,11 +3408,12 @@ class DouyinCollector:
             logger.info("Phase 0: 搜索采集+账号发现 | 账号池=%d | 待采集=%d", pool_before, ready)
             logger.info("=" * 50)
 
-            # ★ FAST-PATH: 账号池充足(>=800)直接跳过发现阶段
+            # ★ 关键词搜索已被抖音滑块验证码拦截(verify.zijieapi.com/captcha)，跳过
+            # 主页采集(Phase 1)已验证能正常加载帖子，作为主要数据来源
             if pool_before >= 800:
-                logger.info("  ⏭ 账号池已充足(%d个)，跳过Phase 0（快速模式）", pool_before)
+                logger.info("  ⏭ 跳过关键词搜索(被验证码拦截)，直接采集账号主页")
             else:
-                # Phase 0: 仅账号池不足时执行搜索发现
+                # Phase 0: 账号池不足时才执行搜索发现
                 search_vp = get_random_viewport()
                 search_ua = get_random_ua()
                 discovery_ctx = await browser.new_context(
@@ -3556,16 +3548,36 @@ async def douyin_login():
         user_agent=login_ua,
     )
     page = await ctx.new_page()
-    await page.goto("https://www.douyin.com", wait_until="domcontentloaded")
+    try:
+        await page.goto("https://www.douyin.com", wait_until="domcontentloaded",
+                        timeout=60000)
+    except Exception as e:
+        print(f"  首页加载超时(可忽略，请直接扫码登录): {str(e)[:60]}")
 
-    print("请扫码登录，倒计时 120 秒...")
+    print("请扫码登录，最长等待 300 秒...")
     print("提示: 登录后请随意浏览几个视频和搜索，帮助生成完整Cookie")
-    for i in range(120, 0, -1):
+    LOGIN_WAIT_S = 300
+    logged_in = False
+    for i in range(LOGIN_WAIT_S, 0, -1):
         if i % 20 == 0:
             print(f"\n  剩余 {i} 秒...")
         sys.stdout.write("."); sys.stdout.flush()
         await asyncio.sleep(1)
+        # ★ 每3秒检测一次是否已登录（出现 sessionid 即视为登录成功，提前保存）
+        if i % 3 == 0:
+            try:
+                cookies = await ctx.cookies()
+                names = {c.get("name") for c in cookies}
+                if "sessionid" in names:
+                    logged_in = True
+                    print("\n  ✅ 检测到登录成功，继续生成Cookie...")
+                    break
+            except Exception:
+                pass
     print()
+
+    if not logged_in:
+        print("  ⚠️  未检测到登录（sessionid 缺失），请确认已扫码登录后重试 --login")
 
     # ★ v5: 自动浏览页面生成风控令牌（msToken/webid/install_id 等）
     print("\n正在自动浏览页面以生成风控令牌...")

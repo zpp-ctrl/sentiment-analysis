@@ -304,8 +304,8 @@ class MainPipeline:
         # 基于情感分析预测
         predictions = predictor.predict_all_indices(posts_df)
 
-        # 添加日期信息 ★ 预测当日指数涨跌
-        target_day = today  # 当日预测
+        # 添加日期信息 ★ 预测次日指数涨跌
+        target_day = TradingCalendar.get_next_trading_day(today)  # 预测下一个交易日（明天）
         for pred in predictions:
             pred["predict_date"] = today
             pred["target_date"] = target_day

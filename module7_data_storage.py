@@ -42,6 +42,36 @@ logger = logging.getLogger(__name__)
 SQLITE_DB_PATH = os.path.join(OUTPUT_DIR, "financial_sentiment.db")
 
 
+def _safe_int(value, default=0):
+    """安全转 int，容忍 None/NaN/空值，避免 'cannot convert float NaN to integer'"""
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value, default=0.0):
+    """安全转 float，容忍 None/NaN/空值"""
+    if value is None:
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class MySQLManager:
     """
     MySQL数据库管理器
@@ -334,17 +364,17 @@ class MySQLManager:
                 str(row.get("post_type", "")),
                 str(row.get("post_content", "")),
                 str(row.get("post_url", "")) if pd.notna(row.get("post_url")) else None,
-                int(row.get("like_count", 0)),
-                int(row.get("comment_count", 0)),
-                int(row.get("share_count", 0)),
+                _safe_int(row.get("like_count", 0)),
+                _safe_int(row.get("comment_count", 0)),
+                _safe_int(row.get("share_count", 0)),
                 row.get("post_time", datetime.now()),
                 row.get("collect_time", datetime.now()),
-                int(row.get("is_ad", 0)),
-                int(row.get("is_stock_only", 0)),
+                _safe_int(row.get("is_ad", 0)),
+                _safe_int(row.get("is_stock_only", 0)),
                 str(row.get("sentiment", "")),
-                float(row.get("sentiment_score", 0.5)),
+                _safe_float(row.get("sentiment_score", 0.5)),
                 # ★ 视频内容提取字段
-                int(row.get("video_content_extracted", False)),
+                _safe_int(row.get("video_content_extracted", False)),
                 str(row.get("audio_transcript", "")) if pd.notna(row.get("audio_transcript")) else None,
                 str(row.get("visual_description", "")) if pd.notna(row.get("visual_description")) else None,
             ))
