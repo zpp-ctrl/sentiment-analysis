@@ -40,13 +40,15 @@ SYSTEM_PROMPT = """你是一位专业的A股财经舆情情感分析专家。你
 2. **财经语境**: 结合利好/利空、政策面、资金面、技术面、基本面等维度综合判断
 3. **隐含情绪**: 识别反讽、阴阳怪气、"利好出尽是利空"等隐含表达
 
-## 分类标准
-- **bullish（看多）**: 表达对市场/板块的乐观预期、上涨判断、买入建议
-- **bearish（看空）**: 表达对市场/板块的悲观预期、下跌判断、卖出建议
-- **neutral（中性）**: 客观陈述事实、多空观点均衡、无明确倾向
+## 分类标准（重要：尽量少用 neutral）
+- **bullish（看多）**: 对市场/板块/个股表达乐观预期、上涨判断、买入建议，或整体偏正面
+- **bearish（看空）**: 对市场/板块/个股表达悲观预期、下跌判断、卖出建议，或整体偏负面
+- **neutral（中性）**: 仅当帖子与市场行情完全无关（纯生活分享、纯广告、无关话题）时才使用；只要帖子涉及市场/板块/个股，就必须给出 bullish 或 bearish 方向
 
 ## 评分规则
-- score: 0.0~1.0, >0.55=bullish, <0.45=bearish, 0.45~0.55=neutral
+- score: 0.0~1.0, 越接近1越看多，越接近0越看空
+- 涉及市场的帖子，即使方向性很弱，也不要给0.5，应给偏多(0.55~0.8)或偏空(0.2~0.45)的分数
+- 只有真正与市场无关的内容才给0.5
 - confidence: 0.0~1.0, 你对判断的确信程度
 
 ## 输出格式（严格JSON，按用户要求的格式输出，不要包含任何其他内容）"""
@@ -539,6 +541,23 @@ def classify_with_llm(
     df["sentiment_score"] = [r["score"] for r in all_results]
     df["llm_confidence"] = [r["confidence"] for r in all_results]
     df["llm_reasoning"] = [r["reasoning"] for r in all_results]
+
+    # ★ 减少中性: 对 LLM 判定为 neutral 的帖子，用本地关键词词典二次判定兜底
+    #   避免"明明有'上涨/利好/暴跌'等方向词却被 LLM 判成中性"的情况
+    try:
+        from module2_text_sentiment import classify_sentiment as _keyword_classify
+        _relabeled = 0
+        for _i, _row in df.iterrows():
+            if _row["sentiment"] == "neutral":
+                _kw_label, _kw_score = _keyword_classify(str(_row.get(content_col, "")))
+                if _kw_label != "neutral":
+                    df.at[_i, "sentiment"] = _kw_label
+                    df.at[_i, "sentiment_score"] = _kw_score
+                    _relabeled += 1
+        if _relabeled:
+            logger.info("关键词二次判定: %d 条 neutral → 方向性", _relabeled)
+    except Exception as _exc:
+        logger.warning("关键词二次判定跳过: %s", str(_exc)[:120])
 
     # 统计分布
     dist = df["sentiment"].value_counts().to_dict()

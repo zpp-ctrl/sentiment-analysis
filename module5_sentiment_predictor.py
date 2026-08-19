@@ -235,20 +235,19 @@ class SentimentPredictor:
         # 判定方向（新增 偏多/偏空 档，避免明显偏多被压成中性）
         if net_score > 0.15:
             direction = "up"
-            confidence = min(net_score * 1.5, 0.95)
         elif net_score > 0.05:
             direction = "slightly_up"
-            confidence = 0.5 + abs(net_score)
         elif net_score < -0.15:
             direction = "down"
-            confidence = min(abs(net_score) * 1.5, 0.95)
         elif net_score < -0.05:
             direction = "slightly_down"
-            confidence = 0.5 + abs(net_score)
         else:
             # |net_score| <= 0.05，多空基本均衡
             direction = "neutral"
-            confidence = 0.5 + abs(net_score)
+
+        # ★ 置信度 = 多空净差的单调映射（50%~95%），净差越大置信度越高
+        #   修复: 原先 "up/down" 档用 net*1.5 少了 0.5 底，导致越强反而越低
+        confidence = min(0.5 + abs(net_score), 0.95)
 
         return {
             "index_code": index_code,

@@ -251,6 +251,10 @@ class MainPipeline:
             import pandas as pd
             posts_df = pd.DataFrame()
 
+        # ★ 过滤非财经内容（做饭/养花/演唱会等），降低无关中性占比
+        from module2_text_sentiment import filter_finance_posts
+        posts_df = filter_finance_posts(posts_df, "post_content")
+
         if LLM_ENABLED:
             from module2_text_sentiment import classify_batch_llm
             classified_df = classify_batch_llm(posts_df)

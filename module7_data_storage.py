@@ -685,11 +685,18 @@ class ExcelReporter:
                 ws.cell(row=i, column=4, value=str(pred.get("index_name", "")))
 
                 direction = str(pred.get("predict_direction", ""))
-                cell_dir = ws.cell(row=i, column=5, value="看涨" if direction == "up" else "看跌")
-                if direction == "up":
-                    cell_dir.font = Font(color="CC0000", bold=True)
+                direction_zh = {
+                    "up": "看涨", "slightly_up": "偏多",
+                    "slightly_down": "偏空", "down": "看跌", "neutral": "中性",
+                }
+                cell_dir = ws.cell(row=i, column=5,
+                                   value=direction_zh.get(direction, direction))
+                if direction in ("up", "slightly_up"):
+                    cell_dir.font = Font(color="CC0000", bold=True)   # 红=涨
+                elif direction in ("down", "slightly_down"):
+                    cell_dir.font = Font(color="006600", bold=True)   # 绿=跌
                 else:
-                    cell_dir.font = Font(color="006600", bold=True)
+                    cell_dir.font = Font(color="000000", bold=True)   # 中性
 
                 ws.cell(row=i, column=6, value=float(pred.get("predict_prob", 0.5)))
                 ws.cell(row=i, column=6).number_format = "0.00%"

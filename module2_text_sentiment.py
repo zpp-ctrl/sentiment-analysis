@@ -98,6 +98,53 @@ TRANSITION_WORDS = [
 ]
 
 
+# ==================== 财经相关性过滤 ====================
+
+def is_finance_post(text: str) -> bool:
+    """
+    判断帖子是否为财经相关内容。
+    用于过滤财经博主发布的非财经内容（做饭/养花/演唱会/生活vlog等），
+    避免这些无关帖子被当作"中性"拉高中性占比、稀释真实市场情绪。
+
+    返回: True=财经相关，False=无关
+    """
+    from config import FINANCE_POST_KEYWORDS
+
+    text = str(text or "")
+    if not text.strip():
+        return False
+    return any(kw in text for kw in FINANCE_POST_KEYWORDS)
+
+
+def filter_finance_posts(
+    df: pd.DataFrame,
+    content_col: str = "post_content",
+) -> pd.DataFrame:
+    """
+    从帖子表中过滤出财经相关帖子。
+
+    Args:
+        df: 帖子 DataFrame
+        content_col: 文本列名
+
+    Returns:
+        仅含财经相关帖子的 DataFrame（新增 is_finance 列）
+    """
+    if df is None or len(df) == 0:
+        return df
+
+    df = df.copy()
+    df["is_finance"] = df[content_col].fillna("").map(is_finance_post)
+    n_total = len(df)
+    n_finance = int(df["is_finance"].sum())
+    n_other = n_total - n_finance
+    logger.info(
+        "财经相关性过滤: 总%d条 → 保留%d条财经帖, 过滤%d条无关帖(%.1f%%)",
+        n_total, n_finance, n_other, 100.0 * n_other / n_total if n_total else 0,
+    )
+    return df[df["is_finance"]].drop(columns=["is_finance"]).reset_index(drop=True)
+
+
 # ==================== 文本清洗函数 ====================
 
 def clean_text(text: str) -> str:
